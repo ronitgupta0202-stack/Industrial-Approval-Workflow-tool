@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Industrial Approval Workflow</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #232738;
+      --border: #2e3347; --accent: #4f8ef7; --accent2: #7c5bf7;
+      --text: #e2e8f0; --text-muted: #8892a4;
+      --green: #22c55e; --yellow: #eab308; --red: #ef4444; --orange: #f97316;
+      --radius: 10px; --shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    body { font-family: "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+    header {
+      background: linear-gradient(135deg,#1a1d27 0%,#232738 100%);
+      border-bottom: 1px solid var(--border); padding: 0 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow);
+    }
+    .header-brand { display: flex; align-items: center; gap: 12px; }
+    .header-brand .logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .header-brand h1 {
+      font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .header-brand p { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
+    .role-bar { display: flex; align-items: center; gap: 10px; }
+    .role-bar label { font-size: 0.8rem; color: var(--text-muted); }
+    .role-select {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 32px 6px 12px; border-radius: 8px; font-size: 0.85rem; cursor: pointer;
+      appearance: none; transition: border-color 0.2s;
+    }
+    .role-select:focus { outline: none; border-color: var(--accent); }
+    .role-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+    .role-badge.APPLICANT { background: rgba(234,179,8,0.18); color: var(--yellow); }
+    .role-badge.DEPT_A { background: rgba(79,142,247,0.18); color: var(--accent); }
+    .role-badge.DEPT_B { background: rgba(124,91,247,0.18); color: var(--accent2); }
+    .role-badge.ADMIN  { background: rgba(34,197,94,0.18);  color: var(--green); }
+    .current-role-label { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-right: 2px; }
+    main { max-width: 1280px; margin: 0 auto; padding: 28px 24px; }
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; position: relative; overflow: hidden; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+    .stat-card::before { content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .stat-card.total::before    { background: var(--accent); }
+    .stat-card.dept-a::before   { background: var(--accent); }
+    .stat-card.dept-b::before   { background: var(--accent2); }
+    .stat-card.breached::before { background: var(--red); }
+    .stat-card.approved::before { background: var(--green); }
+    .stat-card.rejected::before { background: var(--text-muted); }
+    .stat-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+    .stat-value { font-size: 2rem; font-weight: 700; margin-top: 6px; line-height: 1; }
+    .stat-card.total .stat-value    { color: var(--accent); }
+    .stat-card.dept-a .stat-value   { color: var(--accent); }
+    .stat-card.dept-b .stat-value   { color: var(--accent2); }
+    .stat-card.breached .stat-value { color: var(--red); }
+    .stat-card.approved .stat-value { color: var(--green); }
+    .stat-card.rejected .stat-value { color: var(--text-muted); }
+    .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; align-items: center; }
+    .filters select, .filters input {
+      background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 12px; border-radius: 8px; font-size: 0.82rem;
+    }
+    .filters input { min-width: 220px; flex: 1; }
+    .filters select:focus, .filters input:focus { outline: none; border-color: var(--accent); }
+    .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+    .toolbar h2 { font-size: 1rem; font-weight: 600; }
+    .btn-new {
+      display: flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; border: none; padding: 9px 18px; border-radius: 8px;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s, transform 0.15s;
+      box-shadow: 0 2px 12px rgba(79,142,247,0.35);
+    }
+    .btn-new:hover { opacity: 0.9; transform: translateY(-1px); }
+    .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { background: var(--surface2); }
+    thead th { padding: 12px 16px; text-align: left; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.15s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    tbody tr.sla-breached-row { background: rgba(239,68,68,0.04); }
+    tbody tr.sla-breached-row:hover { background: rgba(239,68,68,0.07); }
+    tbody tr.sla-approaching-row { background: rgba(249,115,22,0.04); }
+    td { padding: 14px 16px; font-size: 0.875rem; vertical-align: middle; }
+    td.id-col { color: var(--text-muted); font-family: monospace; font-size: 0.8rem; }
+    td.name-col { font-weight: 600; }
+    td.desc-col { color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; }
+    .badge::before { content:""; width:6px; height:6px; border-radius:50%; display:inline-block; flex-shrink:0; }
+    .badge.SUBMITTED     { background: rgba(234,179,8,0.15);  color: var(--yellow);  }
+    .badge.SUBMITTED::before     { background: var(--yellow); }
+    .badge.DEPT_A_REVIEW { background: rgba(79,142,247,0.15); color: var(--accent);  }
+    .badge.DEPT_A_REVIEW::before { background: var(--accent); }
+    .badge.DEPT_B_REVIEW { background: rgba(124,91,247,0.15); color: var(--accent2); }
+    .badge.DEPT_B_REVIEW::before { background: var(--accent2); }
+    .badge.APPROVED      { background: rgba(34,197,94,0.15);  color: var(--green);   }
+    .badge.APPROVED::before      { background: var(--green); }
+    .badge.REJECTED      { background: rgba(239,68,68,0.12);  color: #f87171;        }
+    .badge.REJECTED::before      { background: #f87171; }
+    .sla-ok     { background: rgba(34,197,94,0.1);  color: var(--green); }
+    .sla-ok::before { background: var(--green); }
+    .sla-approach { background: rgba(249,115,22,0.15); color: var(--orange); }
+    .sla-approach::before { background: var(--orange); }
+    .sla-breach { background: rgba(239,68,68,0.18); color: var(--red); animation: pulse-red 1.5s infinite; }
+    .sla-breach::before { background: var(--red); }
+    @keyframes pulse-red { 0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); } 50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); } }
+    .time-elapsed { font-size: 0.8rem; font-family: monospace; color: var(--text-muted); }
+    .time-elapsed.warn   { color: var(--orange); }
+    .time-elapsed.danger { color: var(--red); font-weight: 600; }
+    .action-cell { display: flex; gap: 8px; align-items: center; }
+    .btn-action { padding: 6px 14px; border-radius: 6px; border: 1px solid transparent; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+    .btn-approve { background: rgba(34,197,94,0.12); color: var(--green); border-color: rgba(34,197,94,0.3); }
+    .btn-approve:hover { background: rgba(34,197,94,0.22); border-color: var(--green); }
+    .btn-reject  { background: rgba(239,68,68,0.1);  color: #f87171; border-color: rgba(239,68,68,0.25); }
+    .btn-reject:hover { background: rgba(239,68,68,0.2); border-color: var(--red); }
+    .btn-action:disabled { opacity: 0.25; cursor: not-allowed; pointer-events: none; }
+    .btn-detail { padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 0.78rem; cursor: pointer; transition: all 0.15s; }
+    .btn-detail:hover { border-color: var(--accent); color: var(--accent); }
+    .empty-state { text-align: center; padding: 64px 32px; color: var(--text-muted); }
+    .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 520px; box-shadow: 0 24px 60px rgba(0,0,0,0.5); animation: modal-in 0.2s ease; }
+    @keyframes modal-in { from { opacity:0; transform: scale(0.95) translateY(-8px); } to { opacity:1; transform: scale(1) translateY(0); } }
+    .modal-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h3 { font-size: 1.05rem; font-weight: 700; }
+    .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.4rem; cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px; transition: color 0.15s; }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px 24px; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 7px; }
+    .form-group input, .form-group textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 0.9rem; font-family: inherit; transition: border-color 0.2s; }
+    .form-group textarea { resize: vertical; min-height: 90px; }
+    .form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); }
+    .modal-footer { padding: 0 24px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+    .btn-cancel { padding: 9px 18px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+    .btn-cancel:hover { border-color: var(--text-muted); color: var(--text); }
+    .btn-submit { padding: 9px 20px; border-radius: 8px; border: none; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: opacity 0.2s; box-shadow: 0 2px 12px rgba(79,142,247,0.3); }
+    .btn-submit:hover { opacity: 0.88; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .side-panel-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(2px); z-index: 150; }
+    .side-panel-overlay.open { display: block; }
+    .side-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; transform: translateX(100%); transition: transform 0.3s ease; z-index: 151; box-shadow: -8px 0 40px rgba(0,0,0,0.4); }
+    .side-panel.open { transform: translateX(0); }
+    .panel-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--surface); z-index: 1; }
+    .panel-header h3 { font-size: 1rem; font-weight: 700; }
+    .panel-body { padding: 20px 24px; }
+    .detail-field { margin-bottom: 18px; }
+    .detail-field .field-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 5px; }
+    .detail-field .field-value { font-size: 0.9rem; }
+    .timeline { margin-top: 8px; }
+    .timeline h4 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 16px; }
+    .timeline-item { display: flex; gap: 14px; padding-bottom: 20px; position: relative; }
+    .timeline-item:not(:last-child)::after { content: ""; position: absolute; left: 11px; top: 24px; bottom: 0; width: 2px; background: var(--border); }
+    .timeline-item.active .timeline-dot { box-shadow: 0 0 0 4px rgba(79,142,247,0.25); }
+    .timeline-item.active .tc-status { color: var(--accent); }
+    .timeline-item.upcoming { opacity: 0.45; }
+    .workflow-legend-title { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 10px; text-transform: uppercase; }
+    .legend-or { font-size: 0.68rem; color: var(--text-muted); min-width: 28px; text-align: center; }
+    .timeline-dot { width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; position: relative; z-index: 1; }
+    .timeline-dot.status-SUBMITTED     { background: rgba(234,179,8,0.2);  color: var(--yellow);  border: 2px solid var(--yellow);  }
+    .timeline-dot.status-DEPT_A_REVIEW { background: rgba(79,142,247,0.2); color: var(--accent);  border: 2px solid var(--accent);  }
+    .timeline-dot.status-DEPT_B_REVIEW { background: rgba(124,91,247,0.2); color: var(--accent2); border: 2px solid var(--accent2); }
+    .timeline-dot.status-APPROVED      { background: rgba(34,197,94,0.2);  color: var(--green);   border: 2px solid var(--green);   }
+    .timeline-dot.status-REJECTED      { background: rgba(239,68,68,0.2);  color: var(--red);     border: 2px solid var(--red);     }
+    .timeline-content { flex: 1; }
+    .timeline-content .tc-status { font-size: 0.82rem; font-weight: 600; }
+    .timeline-content .tc-meta   { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+    .toast-container { position: fixed; bottom: 24px; right: 24px; display: flex; flex-direction: column; gap: 10px; z-index: 300; }
+    .toast { padding: 12px 18px; border-radius: 10px; font-size: 0.85rem; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: toast-in 0.3s ease; max-width: 320px; }
+    @keyframes toast-in { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }
+    .toast.success { background: rgba(34,197,94,0.18);  border: 1px solid rgba(34,197,94,0.4);  color: var(--green); }
+    .toast.error   { background: rgba(239,68,68,0.18);  border: 1px solid rgba(239,68,68,0.4);  color: var(--red); }
+    .toast.info    { background: rgba(79,142,247,0.18); border: 1px solid rgba(79,142,247,0.4); color: var(--accent); }
+    .sla-info { display: inline-flex; align-items: center; gap: 6px; background: rgba(249,115,22,0.1); border: 1px solid rgba(249,115,22,0.25); color: var(--orange); padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .pipeline { display: flex; align-items: center; margin-bottom: 28px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 24px; overflow-x: auto; gap: 8px; }
+    .pipe-node { text-align: center; flex: 1; min-width: 90px; }
+    .pipe-node .pn-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px; }
+    .pipe-node .pn-badge { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; }
+    .pipe-node.stage-SUBMITTED     .pn-badge { background: rgba(234,179,8,0.15);  color: var(--yellow);  border: 1px solid rgba(234,179,8,0.3);  }
+    .pipe-node.stage-DEPT_A_REVIEW .pn-badge { background: rgba(79,142,247,0.15); color: var(--accent);  border: 1px solid rgba(79,142,247,0.3); }
+    .pipe-node.stage-DEPT_B_REVIEW .pn-badge { background: rgba(124,91,247,0.15); color: var(--accent2); border: 1px solid rgba(124,91,247,0.3); }
+    .pipe-node.stage-APPROVED      .pn-badge { background: rgba(34,197,94,0.15);  color: var(--green);   border: 1px solid rgba(34,197,94,0.3);  }
+    .pipe-node.stage-REJECTED      .pn-badge { background: rgba(239,68,68,0.15);  color: var(--red);     border: 1px solid rgba(239,68,68,0.3);  }
+    .pipe-arrow { color: var(--border); font-size: 1.2rem; flex-shrink: 0; }
+    .pipe-count { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (max-width: 768px) { header { padding: 0 16px; } main { padding: 16px; } .side-panel { width: 100%; } td.desc-col { display: none; } .stats-row { grid-template-columns: repeat(2,1fr); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-brand">
+    <div class="logo">&#x2699;&#xFE0F;</div>
+    <div>
+      <h1>Industrial Approval Workflow</h1>
+      <p>Multi-stage approval chain with SLA breach tracking</p>
+    </div>
+  </div>
+  <div class="role-bar">
+    <span class="current-role-label">Current Role</span>
+    <select id="roleSelect" class="role-select">
+      <option value="APPLICANT">Applicant</option>
+      <option value="DEPT_A" selected>Department A</option>
+      <option value="DEPT_B">Department B</option>
+      <option value="ADMIN">Admin (Monitor)</option>
+    </select>
+    <span id="roleBadge" class="role-badge DEPT_A">Department A</span>
+  </div>
+</header>
+<main>
+  <div class="pipeline">
+    <div style="min-width:120px;margin-right:8px;">
+      <div class="workflow-legend-title">Application Workflow</div>
+      <div style="font-size:0.72rem;color:var(--text-muted);line-height:1.4">Submit auto-routes to Dept A</div>
+    </div>
+    <div class="pipe-node stage-SUBMITTED"><div class="pn-label">Start</div><div class="pn-badge">SUBMITTED</div><div class="pipe-count" id="cnt-SUBMITTED">0 apps</div></div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-node stage-DEPT_A_REVIEW"><div class="pn-label">Dept A</div><div class="pn-badge">DEPT A REVIEW</div><div class="pipe-count" id="cnt-DEPT_A_REVIEW">0 apps</div></div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-node stage-DEPT_B_REVIEW"><div class="pn-label">Dept B</div><div class="pn-badge">DEPT B REVIEW</div><div class="pipe-count" id="cnt-DEPT_B_REVIEW">0 apps</div></div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-node stage-APPROVED"><div class="pn-label">Terminal</div><div class="pn-badge">APPROVED</div><div class="pipe-count" id="cnt-APPROVED">0 apps</div></div>
+    <div class="legend-or">or</div>
+    <div class="pipe-node stage-REJECTED"><div class="pn-label">Terminal</div><div class="pn-badge">REJECTED</div><div class="pipe-count" id="cnt-REJECTED">0 apps</div></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card total"><div class="stat-label">Total Applications</div><div class="stat-value" id="statTotal">0</div></div>
+    <div class="stat-card dept-a"><div class="stat-label">In Department A Review</div><div class="stat-value" id="statDeptA">0</div></div>
+    <div class="stat-card dept-b"><div class="stat-label">In Department B Review</div><div class="stat-value" id="statDeptB">0</div></div>
+    <div class="stat-card approved"><div class="stat-label">Approved</div><div class="stat-value" id="statApproved">0</div></div>
+    <div class="stat-card rejected"><div class="stat-label">Rejected</div><div class="stat-value" id="statRejected">0</div></div>
+    <div class="stat-card breached"><div class="stat-label">SLA Breached</div><div class="stat-value" id="statBreached">0</div></div>
+  </div>
+  <div class="toolbar">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <h2>Applications</h2>
+      <span class="sla-info">SLA: 60s per review stage (DEPT_A / DEPT_B)</span>
+    </div>
+    <button class="btn-new" id="btnNewApp">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Application
+    </button>
+  </div>
+  <div class="filters">
+    <select id="filterStatus">
+      <option value="ALL">All statuses</option>
+      <option value="DEPT_A_REVIEW">Department A Review</option>
+      <option value="DEPT_B_REVIEW">Department B Review</option>
+      <option value="APPROVED">Approved</option>
+      <option value="REJECTED">Rejected</option>
+    </select>
+    <select id="filterSla">
+      <option value="ALL">All SLA</option>
+      <option value="ON_TRACK">On Track</option>
+      <option value="APPROACHING">Approaching SLA</option>
+      <option value="BREACHED">Breached</option>
+    </select>
+    <input type="search" id="filterSearch" placeholder="Search ID, applicant, or title" />
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Applicant</th><th>Title</th>
+          <th>Status</th><th>Time in Stage</th><th>SLA</th>
+          <th>Actions</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="appTableBody">
+        <tr><td colspan="8"><div class="empty-state"><div class="icon">&#x1F4CB;</div><p><span class="spinner"></span>Loading applications&hellip;</p></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+<div class="modal-overlay" id="newAppModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Application</h3>
+      <button class="modal-close" id="modalCloseBtn">&#xD7;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label for="inputName">Applicant Name</label><input type="text" id="inputName" placeholder="e.g. Ravi Kumar" autocomplete="off" /></div>
+      <div class="form-group"><label for="inputTitle">Title</label><input type="text" id="inputTitle" placeholder="e.g. Spare parts purchase" autocomplete="off" /></div>
+      <div class="form-group"><label for="inputDesc">Description</label><textarea id="inputDesc" placeholder="Briefly describe this approval request&#x2026;"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="modalCancelBtn">Cancel</button>
+      <button class="btn-submit" id="modalSubmitBtn">Submit Application</button>
+    </div>
+  </div>
+</div>
+<div class="side-panel-overlay" id="sidePanelOverlay"></div>
+<div class="side-panel" id="sidePanel">
+  <div class="panel-header">
+    <h3 id="panelTitle">Application Detail</h3>
+    <button class="modal-close" id="panelCloseBtn">&#xD7;</button>
+  </div>
+  <div class="panel-body" id="panelBody"></div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+<script>
+const API = (window.location.protocol === 'file:' || (window.location.origin && !window.location.origin.includes('3000'))) ? 'http://localhost:3000' : '';
+
+// Keep in sync with backend statemachine.js
+const SLA_THRESHOLDS = {
+  DEPT_A_REVIEW: 60,
+  DEPT_B_REVIEW: 60
+};
+
+let applications = [];
+let currentRole = 'DEPT_A';
+let isLoading = false;
+let openDetailId = null;
+let openDetailApp = null;
+
+const ROLE_LABELS = {
+  APPLICANT: 'Applicant',
+  DEPT_A: 'Department A',
+  DEPT_B: 'Department B',
+  ADMIN: 'Admin'
+};
+const STATUS_LABELS = {
+  SUBMITTED: 'Submitted',
+  DEPT_A_REVIEW: 'Department A Review',
+  DEPT_B_REVIEW: 'Department B Review',
+  APPROVED: 'Approved',
+  REJECTED: 'Rejected'
+};
+const ROLE_CAN_ACT = {
+  APPLICANT: new Set(),
+  DEPT_A: new Set(['DEPT_A_REVIEW']),
+  DEPT_B: new Set(['DEPT_B_REVIEW']),
+  ADMIN: new Set()
+};
+
+function canAct(role, status) {
+  if (['APPROVED', 'REJECTED'].includes(status)) return false;
+  const allowed = ROLE_CAN_ACT[role];
+  return !!(allowed && allowed.has(status));
+}
+
+function showToast(msg, type, dur) {
+  type = type || 'info';
+  dur = dur || 3500;
+  const c = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.textContent = msg;
+  c.appendChild(el);
+  setTimeout(function () {
+    el.style.opacity = '0';
+    el.style.transition = 'opacity 0.4s';
+    setTimeout(function () { el.remove(); }, 400);
+  }, dur);
+}
+
+function formatElapsed(s) {
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm ' + (s % 60) + 's';
+  return Math.floor(s / 3600) + 'h ' + Math.floor((s % 3600) / 60) + 'm';
+}
+function formatDate(iso) {
+  if (!iso) return '-';
+  return new Date(iso).toLocaleString();
+}
+function elapsedSecs(iso) {
+  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+}
+function escHtml(str) {
+  return String(str == null ? '' : str)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function getSlaStatus(app) {
+  const threshold = SLA_THRESHOLDS[app.current_status];
+  if (threshold === undefined) return null;
+  const elapsed = elapsedSecs(app.stage_entered_at);
+  if (elapsed > threshold) return 'BREACHED';
+  if (elapsed > threshold * 0.75) return 'APPROACHING';
+  return 'ON_TRACK';
+}
+
+function slaBadgeHtml(status) {
+  if (!status) return '<span class="badge" style="background:rgba(255,255,255,0.05);color:var(--text-muted)">N/A</span>';
+  if (status === 'BREACHED') return '<span class="badge sla-breach">&#x1F534; BREACHED</span>';
+  if (status === 'APPROACHING') return '<span class="badge sla-approach">&#x1F7E0; APPROACHING SLA</span>';
+  return '<span class="badge sla-ok">&#x1F7E2; ON TRACK</span>';
+}
+
+function timeClassForSla(status) {
+  if (status === 'BREACHED') return 'danger';
+  if (status === 'APPROACHING') return 'warn';
+  return '';
+}
+
+function errorFromResponse(res, data) {
+  const msg = (data && data.error) ? data.error : 'Request failed';
+  if (res.status === 403) return 'Unauthorized action: ' + msg;
+  if (res.status === 400) return 'Invalid transition: ' + msg;
+  return 'Server error: ' + msg;
+}
+
+async function fetchApps() {
+  const r = await fetch(API + '/applications');
+  const d = await r.json().catch(function () { return {}; });
+  if (!r.ok) throw new Error(errorFromResponse(r, d));
+  return d;
+}
+async function createApp(name, title, desc) {
+  const r = await fetch(API + '/applications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ applicant_name: name, title: title, description: desc })
+  });
+  const d = await r.json().catch(function () { return {}; });
+  if (!r.ok) throw new Error(errorFromResponse(r, d));
+  return d;
+}
+async function transitionApp(id, action) {
+  const r = await fetch(API + '/applications/' + id + '/transition', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: action, role: currentRole })
+  });
+  const d = await r.json().catch(function () { return {}; });
+  if (!r.ok) throw new Error(errorFromResponse(r, d));
+  return d;
+}
+async function fetchApp(id) {
+  const r = await fetch(API + '/applications/' + id);
+  const d = await r.json().catch(function () { return {}; });
+  if (!r.ok) throw new Error(errorFromResponse(r, d));
+  return d;
+}
+
+function filteredApps() {
+  const status = document.getElementById('filterStatus').value;
+  const sla = document.getElementById('filterSla').value;
+  const q = document.getElementById('filterSearch').value.trim().toLowerCase();
+  return applications.filter(function (app) {
+    if (status !== 'ALL' && app.current_status !== status) return false;
+    const slaStatus = getSlaStatus(app);
+    if (sla === 'ON_TRACK' && slaStatus !== 'ON_TRACK') return false;
+    if (sla === 'APPROACHING' && slaStatus !== 'APPROACHING') return false;
+    if (sla === 'BREACHED' && slaStatus !== 'BREACHED') return false;
+    if (q) {
+      const hay = ('#' + app.id + ' ' + (app.applicant_name || '') + ' ' + (app.title || '')).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+}
+
+function filtersActive() {
+  return document.getElementById('filterStatus').value !== 'ALL'
+    || document.getElementById('filterSla').value !== 'ALL'
+    || document.getElementById('filterSearch').value.trim() !== '';
+}
+
+function switchRoleTo(role) {
+  const sel = document.getElementById('roleSelect');
+  if (sel) {
+    sel.value = role;
+    sel.dispatchEvent(new Event('change'));
+  }
+}
+
+function renderTable() {
+  const tbody = document.getElementById('appTableBody');
+  if (isLoading && !applications.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p><span class="spinner"></span>Loading applications&hellip;</p></div></td></tr>';
+    return;
+  }
+  if (!applications.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">&#x1F4CB;</div><p>No applications found.</p><div style="font-size:0.8rem;margin-top:6px;opacity:0.6">Click &ldquo;New Application&rdquo; to get started</div></div></td></tr>';
+    return;
+  }
+  const apps = filteredApps();
+  if (!apps.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">&#x1F50D;</div><p>No applications match the selected filters.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = apps.map(function (app) {
+    const elapsed = elapsedSecs(app.stage_entered_at);
+    const terminal = ['APPROVED', 'REJECTED'].includes(app.current_status);
+    const sla = getSlaStatus(app);
+    const actOk = canAct(currentRole, app.current_status);
+    const rowClass = sla === 'BREACHED' ? 'sla-breached-row' : (sla === 'APPROACHING' ? 'sla-approaching-row' : '');
+    const reqRole = app.current_status === 'DEPT_A_REVIEW' ? 'DEPT_A' : 'DEPT_B';
+    const reqLabel = app.current_status === 'DEPT_A_REVIEW' ? 'Dept A' : 'Dept B';
+    const actionCellHtml = actOk
+      ? '<button class="btn-action btn-approve" onclick="handleTransition(' + app.id + ',\'approve\')">&#x2713; Approve</button>' +
+        '<button class="btn-action btn-reject" onclick="handleTransition(' + app.id + ',\'reject\')">&#x2715; Reject</button>'
+      : (terminal
+        ? '<span style="color:var(--text-muted);font-size:0.8rem">&#x2014;</span>'
+        : '<span style="color:var(--text-muted);font-size:0.75rem;">Awaiting ' + reqLabel + '</span>' +
+          ' <button class="btn-detail" style="margin-left:4px;padding:3px 8px;font-size:0.72rem;border-color:var(--accent);color:var(--accent)" onclick="switchRoleTo(\'' + reqRole + '\')">Act as ' + reqLabel + '</button>');
+    return '<tr class="' + rowClass + '" data-id="' + app.id + '">' +
+      '<td class="id-col">#' + app.id + '</td>' +
+      '<td class="name-col">' + escHtml(app.applicant_name) + '</td>' +
+      '<td class="desc-col" title="' + escHtml(app.title || app.description) + '">' + escHtml(app.title || app.description) + '</td>' +
+      '<td><span class="badge ' + app.current_status + '">' + (STATUS_LABELS[app.current_status] || app.current_status) + '</span></td>' +
+      '<td>' + (terminal
+        ? '<span style="color:var(--text-muted);font-size:0.8rem">&#x2014;</span>'
+        : '<span class="time-elapsed ' + timeClassForSla(sla) + '" data-entered="' + app.stage_entered_at + '">' + formatElapsed(elapsed) + '</span>') + '</td>' +
+      '<td>' + slaBadgeHtml(sla) + '</td>' +
+      '<td><div class="action-cell">' + actionCellHtml + '</div></td>' +
+      '<td><button class="btn-detail" onclick="openDetail(' + app.id + ')">Details &rsaquo;</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function updateStats(apps) {
+  document.getElementById('statTotal').textContent = apps.length;
+  document.getElementById('statDeptA').textContent = apps.filter(function (a) { return a.current_status === 'DEPT_A_REVIEW'; }).length;
+  document.getElementById('statDeptB').textContent = apps.filter(function (a) { return a.current_status === 'DEPT_B_REVIEW'; }).length;
+  document.getElementById('statApproved').textContent = apps.filter(function (a) { return a.current_status === 'APPROVED'; }).length;
+  document.getElementById('statRejected').textContent = apps.filter(function (a) { return a.current_status === 'REJECTED'; }).length;
+  document.getElementById('statBreached').textContent = apps.filter(function (a) { return getSlaStatus(a) === 'BREACHED'; }).length;
+  ['SUBMITTED', 'DEPT_A_REVIEW', 'DEPT_B_REVIEW', 'APPROVED', 'REJECTED'].forEach(function (s) {
+    const el = document.getElementById('cnt-' + s);
+    if (el) {
+      const n = apps.filter(function (a) { return a.current_status === s; }).length;
+      el.textContent = n + ' app' + (n !== 1 ? 's' : '');
+    }
+  });
+}
+
+async function loadApps() {
+  isLoading = true;
+  if (!applications.length) renderTable();
+  try {
+    applications = await fetchApps();
+    renderTable();
+    updateStats(applications);
+  } catch (e) {
+    showToast(e.message || 'Failed to load applications', 'error');
+    if (!applications.length) {
+      document.getElementById('appTableBody').innerHTML =
+        '<tr><td colspan="8"><div class="empty-state"><p>Failed to load applications.</p></div></td></tr>';
+    }
+  } finally {
+    isLoading = false;
+  }
+}
+
+function tickElapsedTimes() {
+  document.querySelectorAll('.time-elapsed[data-entered]').forEach(function (el) {
+    const row = el.closest('tr');
+    const id = row && row.getAttribute('data-id');
+    const app = applications.find(function (a) { return String(a.id) === String(id); });
+    const status = app ? app.current_status : '';
+    const threshold = SLA_THRESHOLDS[status];
+    const secs = elapsedSecs(el.dataset.entered);
+    let sla = null;
+    if (threshold !== undefined) {
+      if (secs > threshold) sla = 'BREACHED';
+      else if (secs > threshold * 0.75) sla = 'APPROACHING';
+      else sla = 'ON_TRACK';
+    }
+    el.textContent = formatElapsed(secs);
+    el.className = 'time-elapsed ' + timeClassForSla(sla);
+    if (row) {
+      row.classList.remove('sla-breached-row', 'sla-approaching-row');
+      if (sla === 'BREACHED') row.classList.add('sla-breached-row');
+      if (sla === 'APPROACHING') row.classList.add('sla-approaching-row');
+      const badgeCell = row.children[5];
+      if (badgeCell) badgeCell.innerHTML = slaBadgeHtml(sla);
+    }
+  });
+  updateStats(applications);
+  if (openDetailId && openDetailApp && document.getElementById('sidePanel').classList.contains('open')) {
+    const live = document.getElementById('detailSlaLive');
+    const timeLive = document.getElementById('detailTimeLive');
+    if (live) {
+      const sla = getSlaStatus(openDetailApp);
+      live.innerHTML = slaBadgeHtml(sla);
+    }
+    if (timeLive) timeLive.textContent = formatElapsed(elapsedSecs(openDetailApp.stage_entered_at));
+  }
+}
+
+async function handleTransition(id, action) {
+  const btns = document.querySelectorAll('[data-id="' + id + '"] .btn-action');
+  btns.forEach(function (b) { b.disabled = true; });
+  try {
+    const updated = await transitionApp(id, action);
+    if (action === 'approve') {
+      showToast('Application #' + id + ' approved \u2014 now ' + (STATUS_LABELS[updated.current_status] || updated.current_status), 'success');
+    } else {
+      showToast('Application #' + id + ' rejected', 'success');
+    }
+    await loadApps();
+    if (openDetailId === id) openDetail(id);
+  } catch (e) {
+    showToast(e.message, 'error');
+    await loadApps();
+  }
+}
+
+function responsibleLabel(status) {
+  if (status === 'DEPT_A_REVIEW') return 'DEPT_A';
+  if (status === 'DEPT_B_REVIEW') return 'DEPT_B';
+  return 'None (terminal or complete)';
+}
+
+function workflowStageItems(app) {
+  const reached = {};
+  (app.history || []).forEach(function (h) { reached[h.to_status] = true; });
+  reached[app.current_status] = true;
+  const rejected = app.current_status === 'REJECTED' || reached.REJECTED;
+  const stages = [
+    { key: 'SUBMITTED', label: 'Submitted' },
+    { key: 'DEPT_A_REVIEW', label: 'Department A Review' },
+    { key: 'DEPT_B_REVIEW', label: 'Department B Review' }
+  ];
+  if (rejected && !reached.APPROVED) {
+    stages.push({ key: 'REJECTED', label: 'Rejected', fail: true });
+  } else {
+    stages.push({ key: 'APPROVED', label: 'Approved' });
+  }
+  return stages.map(function (st) {
+    const isCurrent = app.current_status === st.key;
+    const done = !isCurrent && reached[st.key];
+    const mark = st.fail ? '\u2715' : (done || isCurrent ? '\u2713' : '\u25CB');
+    const cls = 'timeline-item' + (isCurrent ? ' active' : (done ? '' : ' upcoming'));
+    return '<div class="' + cls + '"><div class="timeline-dot status-' + st.key + '">' + mark + '</div>' +
+      '<div class="timeline-content"><div class="tc-status">' + mark + ' ' + st.label +
+      (isCurrent ? ' <span style="font-size:0.72rem;color:var(--accent)">(current)</span>' : '') +
+      '</div></div></div>';
+  }).join('');
+}
+
+function renderDetail(app) {
+  openDetailApp = app;
+  const elapsed = elapsedSecs(app.stage_entered_at);
+  const sla = getSlaStatus(app);
+  const canActHere = canAct(currentRole, app.current_status);
+  const respRoleKey = app.current_status === 'DEPT_A_REVIEW' ? 'DEPT_A' : (app.current_status === 'DEPT_B_REVIEW' ? 'DEPT_B' : '');
+  const respRoleLabel = ROLE_LABELS[app.responsible_role || responsibleLabel(app.current_status)] || app.responsible_role || responsibleLabel(app.current_status);
+  const detailActionsHtml = canActHere
+    ? '<hr style="border-color:var(--border);margin:20px 0"/>' +
+      '<div class="detail-field" data-id="' + app.id + '">' +
+        '<div class="field-label">Available Actions (Current Role: ' + (ROLE_LABELS[currentRole] || currentRole) + ')</div>' +
+        '<div style="display:flex;gap:10px;margin-top:10px">' +
+          '<button class="btn-action btn-approve" style="flex:1;padding:10px;font-size:0.85rem;" onclick="handleTransition(' + app.id + ',\'approve\')">&#x2713; Approve Application</button>' +
+          '<button class="btn-action btn-reject" style="flex:1;padding:10px;font-size:0.85rem;" onclick="handleTransition(' + app.id + ',\'reject\')">&#x2715; Reject Application</button>' +
+        '</div>' +
+      '</div>'
+    : (['APPROVED', 'REJECTED'].includes(app.current_status)
+      ? ''
+      : '<hr style="border-color:var(--border);margin:20px 0"/>' +
+        '<div class="detail-field" style="color:var(--text-muted);font-size:0.8rem;background:var(--surface2);padding:12px 14px;border-radius:8px;border:1px solid var(--border);line-height:1.4">' +
+          '&#x2139;&#xFE0F; Action requires <strong>' + escHtml(respRoleLabel) + '</strong> role.<br/>' +
+          '<button class="btn-new" style="margin-top:10px;padding:6px 14px;font-size:0.8rem;" onclick="switchRoleTo(\'' + respRoleKey + '\')">Switch Active Role to ' + escHtml(respRoleLabel) + '</button>' +
+        '</div>');
+
+  const historyHtml = (app.history || []).map(function (h) {
+    const isCurrent = h.to_status === app.current_status;
+    return '<div class="timeline-item' + (isCurrent ? ' active' : '') + '">' +
+      '<div class="timeline-dot status-' + h.to_status + '">' + (h.to_status === 'REJECTED' ? '\u2715' : '\u2713') + '</div>' +
+      '<div class="timeline-content">' +
+      '<div class="tc-status">' +
+        (h.from_status ? escHtml(h.from_status) + ' &rarr; ' : '') +
+        '<strong>' + escHtml(h.to_status) + '</strong>' +
+      '</div>' +
+      '<div class="tc-meta">Role: ' + escHtml(h.changed_by_role || '\u2014') +
+      ' &middot; ' + formatDate(h.changed_at) + '</div></div></div>';
+  }).join('');
+
+  document.getElementById('panelTitle').textContent = 'Application #' + app.id;
+  document.getElementById('panelBody').innerHTML =
+    '<div class="detail-field"><div class="field-label">Application ID</div><div class="field-value" style="font-family:monospace">#' + app.id + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">Applicant Name</div><div class="field-value" style="font-weight:600">' + escHtml(app.applicant_name) + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">Title</div><div class="field-value">' + escHtml(app.title || '\u2014') + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">Description</div><div class="field-value" style="color:var(--text-muted);line-height:1.5">' + escHtml(app.description) + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">Current Status</div><div class="field-value"><span class="badge ' + app.current_status + '">' + (STATUS_LABELS[app.current_status] || app.current_status) + '</span></div></div>' +
+    '<div class="detail-field" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+      '<div><div class="field-label">Created At</div><div class="field-value" style="font-size:0.82rem">' + formatDate(app.created_at) + '</div></div>' +
+      '<div><div class="field-label">Last Updated</div><div class="field-value" style="font-size:0.82rem">' + formatDate(app.updated_at || app.created_at) + '</div></div>' +
+    '</div>' +
+    '<div class="detail-field"><div class="field-label">Stage Entered At</div><div class="field-value" style="font-size:0.82rem">' + formatDate(app.stage_entered_at) + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">Current Role Responsible</div><div class="field-value">' + escHtml(respRoleLabel) + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">SLA Status</div><div class="field-value" id="detailSlaLive">' + slaBadgeHtml(sla) + '</div></div>' +
+    '<div class="detail-field"><div class="field-label">Time in Current Stage</div><div class="field-value" id="detailTimeLive">' + formatElapsed(elapsed) + '</div></div>' +
+    detailActionsHtml +
+    '<hr style="border-color:var(--border);margin:20px 0"/>' +
+    '<div class="timeline"><h4>Workflow</h4>' + workflowStageItems(app) + '</div>' +
+    '<hr style="border-color:var(--border);margin:20px 0"/>' +
+    '<div class="timeline"><h4>Status History</h4>' + (historyHtml || '<div style="color:var(--text-muted)">No history</div>') + '</div>';
+}
+
+async function openDetail(id) {
+  openDetailId = id;
+  const panel = document.getElementById('sidePanel');
+  const overlay = document.getElementById('sidePanelOverlay');
+  const body = document.getElementById('panelBody');
+  body.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted)"><span class="spinner"></span> Loading&hellip;</div>';
+  panel.classList.add('open'); overlay.classList.add('open');
+  try {
+    const app = await fetchApp(id);
+    renderDetail(app);
+  } catch (e) {
+    body.innerHTML = '<div style="color:var(--red);padding:16px">' + escHtml(e.message) + '</div>';
+  }
+}
+
+function closePanel() {
+  openDetailId = null;
+  openDetailApp = null;
+  document.getElementById('sidePanel').classList.remove('open');
+  document.getElementById('sidePanelOverlay').classList.remove('open');
+}
+function openModal() { document.getElementById('newAppModal').classList.add('open'); document.getElementById('inputName').focus(); }
+function closeModal() {
+  document.getElementById('newAppModal').classList.remove('open');
+  document.getElementById('inputName').value = '';
+  document.getElementById('inputTitle').value = '';
+  document.getElementById('inputDesc').value = '';
+}
+async function submitNewApp() {
+  const name = document.getElementById('inputName').value.trim();
+  const title = document.getElementById('inputTitle').value.trim();
+  const desc = document.getElementById('inputDesc').value.trim();
+  if (!name || !desc) { showToast('Please fill in applicant name and description', 'error'); return; }
+  const btn = document.getElementById('modalSubmitBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>Submitting&hellip;';
+  try {
+    const app = await createApp(name, title, desc);
+    showToast('Application #' + app.id + ' submitted \u2014 now in Department A Review', 'success');
+    closeModal(); await loadApps();
+  } catch (e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.innerHTML = 'Submit Application'; }
+}
+
+document.getElementById('roleSelect').addEventListener('change', function (e) {
+  currentRole = e.target.value;
+  const badge = document.getElementById('roleBadge');
+  badge.textContent = ROLE_LABELS[currentRole];
+  badge.className = 'role-badge ' + currentRole;
+  renderTable();
+  if (openDetailId && openDetailApp) {
+    renderDetail(openDetailApp);
+  }
+  showToast('Current role: ' + ROLE_LABELS[currentRole], 'info', 2000);
+});
+document.getElementById('filterStatus').addEventListener('change', renderTable);
+document.getElementById('filterSla').addEventListener('change', renderTable);
+document.getElementById('filterSearch').addEventListener('input', renderTable);
+document.getElementById('btnNewApp').addEventListener('click', openModal);
+document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
+document.getElementById('modalCancelBtn').addEventListener('click', closeModal);
+document.getElementById('modalSubmitBtn').addEventListener('click', submitNewApp);
+document.getElementById('panelCloseBtn').addEventListener('click', closePanel);
+document.getElementById('sidePanelOverlay').addEventListener('click', closePanel);
+document.getElementById('newAppModal').addEventListener('click', function (e) {
+  if (e.target === document.getElementById('newAppModal')) closeModal();
+});
+document.getElementById('inputName').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('inputTitle').focus();
+});
+document.getElementById('inputTitle').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('inputDesc').focus();
+});
+document.getElementById('inputDesc').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && e.ctrlKey) submitNewApp();
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { closeModal(); closePanel(); }
+});
+loadApps();
+setInterval(loadApps, 15000);
+setInterval(tickElapsedTimes, 1000);
+</script>
+</body>
+</html>
+
